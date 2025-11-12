@@ -1,0 +1,335 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{bm}
+\usepackage{hyperref}
+
+\title{Team-Based Glicko-2 Rating with Per-Player Performance Weighting}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+
+This document describes a rating system for a competitive multiplayer game
+(4v4 or 5v5) based on the Glicko-2 algorithm, extended with:
+\begin{itemize}
+    \item team-based matchmaking (two teams per match),
+    \item per-player performance weighting (stronger contribution for players who carry, weaker for those who underperform).
+\end{itemize}
+
+Each player maintains a Glicko-2 rating state and is updated after every match,
+with the magnitude of the rating change modulated by their relative performance
+inside their own team.
+
+\section{Player State}
+
+For each player $i$ we maintain the following Glicko-2 parameters:
+\begin{itemize}
+    \item rating $R_i$ (e.g.\ initial value $R_0 = 1500$),
+    \item rating deviation $\mathrm{RD}_i$ (e.g.\ initial value $\mathrm{RD}_0 = 350$),
+    \item volatility $\sigma_i$ (e.g.\ initial value $\sigma_0 = 0.06$).
+\end{itemize}
+
+Internally, Glicko-2 uses a transformed scale:
+\begin{align}
+    \mu_i  &= \frac{R_i - 1500}{173.7178}, \\
+    \phi_i &= \frac{\mathrm{RD}_i}{173.7178}.
+\end{align}
+
+These internal parameters $(\mu_i, \phi_i, \sigma_i)$ are used for updates.
+After each update we convert back to $(R_i, \mathrm{RD}_i)$ via:
+\begin{align}
+    R_i &= 173.7178 \cdot \mu_i + 1500, \\
+    \mathrm{RD}_i &= 173.7178 \cdot \phi_i.
+\end{align}
+
+\section{Match Structure}
+
+Each match consists of two teams:
+\begin{itemize}
+    \item Team $A$ with player set $A = \{ a_1, \dots, a_n \}$,
+    \item Team $B$ with player set $B = \{ b_1, \dots, b_m \}$,
+\end{itemize}
+where $n, m \in \{4, 5\}$ for 4v4 or 5v5.
+
+The match outcome is:
+\begin{itemize}
+    \item $S_A = 1, S_B = 0$ if Team $A$ wins,
+    \item $S_A = 0, S_B = 1$ if Team $B$ wins,
+    \item optionally $S_A = S_B = 0.5$ for a draw (if supported).
+\end{itemize}
+
+\section{Per-Player Performance Score}
+
+To incorporate individual performance, the game provides for each player $i$ a
+\emph{performance score} $p_i$ for the match, constructed from in-game
+statistics (kills, deaths, objective actions, damage, etc.).
+
+For example, one might define
+\begin{equation}
+    p_i = w_{\text{kill}} \cdot \text{kills}_i
+        - w_{\text{death}} \cdot \text{deaths}_i
+        + w_{\text{dmg}} \cdot \text{damage}_i
+        + w_{\text{obj}} \cdot \text{objectiveScore}_i,
+\end{equation}
+where $w_{\text{kill}}, w_{\text{death}}, w_{\text{dmg}}, w_{\text{obj}}$ are
+design constants.
+
+The system only needs \emph{relative} performance within each team, so any
+monotonic transformation of $p_i$ is acceptable.
+
+\section{Performance Weighting Within a Team}
+
+For each team $T$ (either $T=A$ or $T=B$), with player set $T = \{ i_1, \dots, i_{|T|} \}$,
+we compute:
+
+\subsection{Team Performance Statistics}
+
+\begin{align}
+    \bar{p}_T &= \frac{1}{|T|} \sum_{i \in T} p_i, \\
+    s_T &= \sqrt{ \frac{1}{|T|} \sum_{i \in T} (p_i - \bar{p}_T)^2 } + \varepsilon,
+\end{align}
+where $\varepsilon > 0$ is a small constant (e.g.\ $\varepsilon = 10^{-6}$)
+to avoid division by zero.
+
+Define the performance $z$-score for each player $i \in T$:
+\begin{equation}
+    z_i = \frac{p_i - \bar{p}_T}{s_T}.
+\end{equation}
+
+\subsection{Raw Performance Weights}
+
+Define a raw performance weight for each player:
+\begin{equation}
+    w_i^{\text{raw}} = 1 + \alpha \cdot z_i,
+\end{equation}
+where $\alpha > 0$ controls how strongly performance influences rating changes
+(e.g.\ $\alpha \in [0.1, 0.3]$).
+
+Clamp the raw weight to stay within a reasonable range:
+\begin{equation}
+    w_i = \min\{ w_{\max}, \max\{ w_{\min}, w_i^{\text{raw}} \} \},
+\end{equation}
+where typical values might be $w_{\min} = 0.5$ and $w_{\max} = 1.5$.
+
+Thus:
+\begin{itemize}
+    \item players who perform around team average have $w_i \approx 1$,
+    \item top performers get $w_i > 1$,
+    \item underperformers get $w_i < 1$.
+\end{itemize}
+
+\subsection{Normalization of Weights}
+
+To keep the average weight for a team equal to $1$, normalize the weights:
+\begin{equation}
+    \tilde{w}_i = w_i \cdot \frac{|T|}{\sum_{j \in T} w_j}.
+\end{equation}
+
+Now,
+\begin{equation}
+    \frac{1}{|T|} \sum_{i \in T} \tilde{w}_i = 1.
+\end{equation}
+
+\section{Team Aggregated Rating for Glicko-2}
+
+Although Glicko-2 is defined for individual vs individual matches, we can
+approximate team games by treating each player's opponent as the
+\emph{aggregated rating} of the opposing team.
+
+For a team $T$ with players $i \in T$, define its internal mean and deviation:
+\begin{align}
+    \mu_T &= \frac{1}{|T|} \sum_{i \in T} \mu_i, \\
+    \phi_T &= \sqrt{ \frac{1}{|T|^2} \sum_{i \in T} \phi_i^2 }.
+\end{align}
+
+In a match between Team $A$ and Team $B$, each player in Team $A$ will treat a
+single opponent with parameters $(\mu_B, \phi_B)$, and analogously each player
+in Team $B$ sees $(\mu_A, \phi_A)$.
+
+\section{Single-Opponent Glicko-2 Update}
+
+This section recalls the standard Glicko-2 update for a player $i$ facing a set
+of opponents $j$. In our application, each player has exactly one opponent: the
+aggregated opposing team.
+
+\subsection{Expected Score and Helper Function}
+
+For a player with parameters $(\mu_i, \phi_i, \sigma_i)$ and a single opponent
+$(\mu_{\text{opp}}, \phi_{\text{opp}})$, define
+\begin{equation}
+    g(\phi_{\text{opp}}) =
+    \left( 1 + \frac{3\phi_{\text{opp}}^2}{\pi^2} \right)^{-1/2}.
+\end{equation}
+
+The expected score for player $i$ is
+\begin{equation}
+    E_i = \frac{1}{1 + \exp\left( - g(\phi_{\text{opp}})\, (\mu_i - \mu_{\text{opp}}) \right)}.
+\end{equation}
+
+\subsection{Variance Term $v$}
+
+For a single opponent, the variance term simplifies to
+\begin{equation}
+    v = \left[ g(\phi_{\text{opp}})^2 E_i (1 - E_i) \right]^{-1}.
+\end{equation}
+
+\subsection{Delta Term $\Delta$}
+
+Given the actual score $s_i$ for player $i$ ($1$ if their team wins,
+$0$ if their team loses, $0.5$ for draw), define
+\begin{equation}
+    \Delta = v \cdot g(\phi_{\text{opp}}) \cdot (s_i - E_i).
+\end{equation}
+
+\subsection{Volatility Update}
+
+The volatility parameter $\sigma_i$ is updated by solving a one-dimensional
+optimization problem. Let
+\begin{equation}
+    a = \ln(\sigma_i^2),
+\end{equation}
+and define an iterative scheme (e.g.\ Newton--Raphson) to find the new
+$a'$ such that
+\begin{equation}
+    f(a') = 0,
+\end{equation}
+where
+\begin{equation}
+    f(x) = 
+    \frac{e^x (\Delta^2 - \phi_i^2 - v - e^x)}{2(\phi_i^2 + v + e^x)^2}
+    - \frac{x - a}{\tau^2}.
+\end{equation}
+Here $\tau$ is a system parameter controlling how quickly volatility can change.
+
+Once $a'$ is found, the updated volatility is
+\begin{equation}
+    \sigma_i' = \exp\left( \frac{a'}{2} \right).
+\end{equation}
+
+\subsection{Intermediate and Final Rating Deviation}
+
+First compute the intermediate deviation:
+\begin{equation}
+    \phi_i^* = \sqrt{\phi_i^2 + \sigma_i'^2}.
+\end{equation}
+Then compute the new deviation:
+\begin{equation}
+    \phi_i' = \left( \frac{1}{\phi_i^{*2}} + \frac{1}{v} \right)^{-1/2}.
+\end{equation}
+
+\subsection{Updated Rating Mean}
+
+Finally, the updated mean (before performance weighting) is
+\begin{equation}
+    \mu_i^* = \mu_i + \phi_i'^2 \cdot g(\phi_{\text{opp}})\,(s_i - E_i).
+\end{equation}
+
+At this point, the standard Glicko-2 update would set
+$(\mu_i', \phi_i', \sigma_i') = (\mu_i^*, \phi_i', \sigma_i')$.
+
+\section{Performance-Weighted Glicko-2 Update}
+
+To incorporate individual performance, we apply the Glicko-2 update as above to
+obtain intermediate values $(\mu_i^*, \phi_i', \sigma_i')$ and then modify
+only the rating mean based on the performance weight $\tilde{w}_i$.
+
+\subsection{Definition of the Weighted Update}
+
+Let
+\begin{equation}
+    \Delta \mu_i = \mu_i^* - \mu_i
+\end{equation}
+be the Glicko-2 change in the internal rating mean. The final mean after
+performance weighting is
+\begin{equation}
+    \mu_i' = \mu_i + \tilde{w}_i \cdot \Delta \mu_i.
+\end{equation}
+
+The deviation and volatility are not scaled by performance:
+\begin{align}
+    \phi_i'   &\text{ as computed in the standard Glicko-2 update}, \\
+    \sigma_i' &\text{ as computed in the standard Glicko-2 update}.
+\end{align}
+
+Thus, performance influences the \emph{magnitude} of the rating change for
+the match but not the uncertainty parameters.
+
+\subsection{Optional Clamping}
+
+To avoid extreme rating jumps, one may clamp the resulting change:
+\begin{equation}
+    \Delta \mu_i' = \mu_i' - \mu_i,
+\end{equation}
+and then limit it by
+\begin{equation}
+    \Delta \mu_i^{\text{final}} = \min\{ \Delta_{\max}, \max\{ -\Delta_{\max}, \Delta \mu_i' \} \},
+\end{equation}
+with some maximum change $\Delta_{\max} > 0$. The final rating mean becomes
+\begin{equation}
+    \mu_i^{\text{final}} = \mu_i + \Delta \mu_i^{\text{final}}.
+\end{equation}
+
+\section{Full Per-Match Update Algorithm}
+
+For each match between Team $A$ and Team $B$:
+
+\begin{enumerate}
+    \item For every player $i$, retrieve $(R_i, \mathrm{RD}_i, \sigma_i)$ and convert to $(\mu_i, \phi_i)$.
+
+    \item Compute team internal parameters $(\mu_A, \phi_A)$ and $(\mu_B, \phi_B)$.
+
+    \item Compute performance scores $p_i$ for all $i \in A \cup B$.
+
+    \item For each team $T \in \{A,B\}$:
+    \begin{enumerate}
+        \item Compute $\bar{p}_T$, $s_T$, $z_i$ for $i \in T$.
+        \item Compute raw weights $w_i^{\text{raw}}$, clamp to $w_i$.
+        \item Normalize to $\tilde{w}_i$ so that the average is $1$.
+    \end{enumerate}
+
+    \item For each player $a_i \in A$:
+    \begin{enumerate}
+        \item Let $(\mu_{\text{opp}}, \phi_{\text{opp}}) = (\mu_B, \phi_B)$.
+        \item Let $s_i = S_A$ (team outcome).
+        \item Perform the standard single-opponent Glicko-2 update using $(\mu_i, \phi_i, \sigma_i)$, $(\mu_{\text{opp}}, \phi_{\text{opp}})$, and $s_i$, obtaining $(\mu_i^*, \phi_i', \sigma_i')$.
+        \item Compute $\Delta \mu_i = \mu_i^* - \mu_i$.
+        \item Set $\mu_i' = \mu_i + \tilde{w}_i \cdot \Delta \mu_i$.
+        \item Optionally clamp $\mu_i' - \mu_i$ to a maximum magnitude.
+    \end{enumerate}
+
+    \item For each player $b_j \in B$, repeat the same procedure with
+    $(\mu_{\text{opp}}, \phi_{\text{opp}}) = (\mu_A, \phi_A)$ and $s_j = S_B$.
+
+    \item Convert each player's updated internal parameters back to
+    $(R_i, \mathrm{RD}_i)$:
+    \begin{align*}
+        R_i &= 173.7178 \cdot \mu_i' + 1500, \\
+        \mathrm{RD}_i &= 173.7178 \cdot \phi_i'.
+    \end{align*}
+\end{enumerate}
+
+\section{Design Notes}
+
+\begin{itemize}
+    \item Win/loss remains the primary driver of rating changes via the Glicko-2
+    core update. Performance only modulates the magnitude of this change.
+
+    \item The average player on a team always has an effective weight $\tilde{w}_i$
+    close to $1$, so the team's average rating change is close to what standard
+    Glicko-2 would produce for a team-based approximation.
+
+    \item Strongly outperforming teammates in a win leads to a larger rating gain;
+    strongly outperforming teammates in a loss leads to a smaller rating loss.
+    Conversely, underperformers gain less on a win and lose more on a loss.
+
+    \item The performance score $p_i$ is game-dependent and should be constructed
+    so that roles (e.g.\ support vs.\ damage) are fairly evaluated relative to
+    other players of the same role.
+\end{itemize}
+
+\end{document}
