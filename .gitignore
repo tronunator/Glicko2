@@ -74,4 +74,4 @@ $RECYCLE.BIN/
 # Keep empty directories
 !.gitkeep
 
-rating_results.csv
+test

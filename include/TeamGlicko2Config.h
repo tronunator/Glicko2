@@ -14,6 +14,23 @@ namespace TeamGlicko2
     /// Default initial volatility (sigma_0)
     static const double kDefaultVolatility = 0.06;
     
+    /// Gamma: Risk-adjustment parameter for player score
+    /// S_i = R_i - gamma * RD_i
+    /// Range: [0.0, ∞)
+    /// - 0.0 = ignore uncertainty (use raw rating only)
+    /// - 0.5 = moderate risk adjustment (recommended)
+    /// - 1.0 = strong penalty for uncertain ratings
+    static const double kGamma = 0.5;
+    
+    /// Lambda: Team uncertainty balance weight
+    /// Objective = |avg(S_A) - avg(S_B)| + lambda * |avg(U_A) - avg(U_B)|
+    /// Uses averages for fair comparison in uneven teams
+    /// Range: [0.0, ∞)
+    /// - 0.0 = ignore team uncertainty balance
+    /// - 0.1 = small preference for balanced uncertainty (recommended)
+    /// - 1.0 = strong preference for balanced uncertainty
+    static const double kLambda = 0.1;
+    
     /// Glicko-1 to Glicko-2 scale factor (173.7178)
     static const double kScale = 173.7178;
     

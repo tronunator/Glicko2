@@ -30,17 +30,20 @@ EXAMPLE_DIR := examples
 LIB_SOURCES := $(SRC_DIR)/TeamGlickoRating.cpp \
                $(SRC_DIR)/TeamRatingAggregator.cpp \
                $(SRC_DIR)/PerformanceWeighting.cpp \
-               $(SRC_DIR)/TeamGlicko2System.cpp
+               $(SRC_DIR)/TeamGlicko2System.cpp \
+               $(SRC_DIR)/TeamBalancer.cpp
 
 # Object files - library
 LIB_OBJECTS := $(BUILD_DIR)/TeamGlickoRating.o \
                $(BUILD_DIR)/TeamRatingAggregator.o \
                $(BUILD_DIR)/PerformanceWeighting.o \
-               $(BUILD_DIR)/TeamGlicko2System.o
+               $(BUILD_DIR)/TeamGlicko2System.o \
+               $(BUILD_DIR)/TeamBalancer.o
 
 # Example programs
 EXAMPLE_TARGET := $(BUILD_DIR)/example_usage
 BATCH_TARGET := $(BUILD_DIR)/batch_processor
+BALANCE_TARGET := $(BUILD_DIR)/team_balancing_test
 
 # Compiler flags
 ifeq ($(COMPILER),MSVC)
@@ -52,6 +55,7 @@ ifeq ($(COMPILER),MSVC)
     MKDIR := if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
     EXAMPLE_TARGET := $(EXAMPLE_TARGET).exe
     BATCH_TARGET := $(BATCH_TARGET).exe
+    BALANCE_TARGET := $(BALANCE_TARGET).exe
 else
     # GCC/MinGW flags
     CXXFLAGS := -std=c++14 -Wall -Wextra -O2 -I$(INC_DIR)
@@ -62,6 +66,7 @@ else
         MKDIR := if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
         EXAMPLE_TARGET := $(EXAMPLE_TARGET).exe
         BATCH_TARGET := $(BATCH_TARGET).exe
+        BALANCE_TARGET := $(BALANCE_TARGET).exe
     else
         RM := rm -f
         RMDIR := rm -rf
@@ -70,7 +75,7 @@ else
 endif
 
 # Default target
-all: $(BUILD_DIR) $(EXAMPLE_TARGET) $(BATCH_TARGET)
+all: $(BUILD_DIR) $(EXAMPLE_TARGET) $(BATCH_TARGET) $(BALANCE_TARGET)
 
 # Create build directory
 $(BUILD_DIR):
@@ -87,6 +92,15 @@ endif
 
 # Build batch_processor
 $(BATCH_TARGET): $(LIB_OBJECTS) $(BUILD_DIR)/batch_processor.o
+ifeq ($(COMPILER),MSVC)
+	$(CXX) $(CXXFLAGS) $^ /Fe:$@ $(LDFLAGS)
+else
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+endif
+	@echo Build complete: $@
+
+# Build team_balancing_test
+$(BALANCE_TARGET): $(LIB_OBJECTS) $(BUILD_DIR)/team_balancing_test.o
 ifeq ($(COMPILER),MSVC)
 	$(CXX) $(CXXFLAGS) $^ /Fe:$@ $(LDFLAGS)
 else
@@ -163,4 +177,6 @@ $(BUILD_DIR)/TeamGlickoRating.o: $(SRC_DIR)/TeamGlickoRating.cpp $(INC_DIR)/Team
 $(BUILD_DIR)/TeamRatingAggregator.o: $(SRC_DIR)/TeamRatingAggregator.cpp $(INC_DIR)/TeamRatingAggregator.h $(INC_DIR)/TeamGlickoRating.h
 $(BUILD_DIR)/PerformanceWeighting.o: $(SRC_DIR)/PerformanceWeighting.cpp $(INC_DIR)/PerformanceWeighting.h $(INC_DIR)/TeamGlicko2Config.h
 $(BUILD_DIR)/TeamGlicko2System.o: $(SRC_DIR)/TeamGlicko2System.cpp $(INC_DIR)/TeamGlicko2System.h $(INC_DIR)/TeamGlickoRating.h $(INC_DIR)/TeamRatingAggregator.h $(INC_DIR)/PerformanceWeighting.h
+$(BUILD_DIR)/TeamBalancer.o: $(SRC_DIR)/TeamBalancer.cpp $(INC_DIR)/TeamBalancer.h $(INC_DIR)/TeamGlickoRating.h
 $(BUILD_DIR)/example_usage.o: $(EXAMPLE_DIR)/example_usage.cpp $(INC_DIR)/TeamGlicko2System.h
+$(BUILD_DIR)/team_balancing_test.o: $(EXAMPLE_DIR)/team_balancing_test.cpp $(INC_DIR)/TeamBalancer.h
