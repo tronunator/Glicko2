@@ -4,11 +4,8 @@
 
 namespace TeamGlicko2
 {
-    std::vector<PlayerWeight> PerformanceWeighting::ComputeWeights(
-        const std::vector<double>& performanceScores,
-        double alpha,
-        double wMin,
-        double wMax)
+    std::vector<PlayerWeight> PerformanceWeighting::ComputeZScores(
+        const std::vector<double>& performanceScores)
     {
         std::vector<PlayerWeight> weights;
         int teamSize = performanceScores.size();
@@ -30,23 +27,32 @@ namespace TeamGlicko2
         double mean = ComputeMean(performanceScores);
         double stddev = ComputeStdDev(performanceScores, mean);
         
-        // Compute z-scores and weights for each player
+        // Compute z-scores for each player
         for (int i = 0; i < teamSize; ++i)
         {
             // z_i = (p_i - mean) / stddev
             weights[i].zScore = ComputeZScore(performanceScores[i], mean, stddev);
-            
-            // w_i^raw = 1 + alpha * z_i
-            weights[i].rawWeight = ComputeRawWeight(weights[i].zScore, alpha);
-            
-            // Clamp to [wMin, wMax]
-            weights[i].clampedWeight = ClampWeight(weights[i].rawWeight, wMin, wMax);
         }
         
-        // Normalize so average weight = 1.0
-        NormalizeWeights(weights);
-        
         return weights;
+    }
+    
+    double PerformanceWeighting::ComputeScalingFactor(
+        double zScore,
+        double deltaMu,
+        double beta,
+        double fMin,
+        double fMax)
+    {
+        // Sign-aware formula: f_i = 1 + β·sign(Δμ)·z_i
+        // This ensures:
+        // - In wins (Δμ > 0): good performers (z > 0) get f > 1 (more gain)
+        // - In losses (Δμ < 0): good performers (z > 0) get f < 1 (less loss)
+        double signDeltaMu = (deltaMu >= 0.0) ? 1.0 : -1.0;
+        double f = 1.0 + beta * signDeltaMu * zScore;
+        
+        // Clamp to valid range
+        return std::min(fMax, std::max(fMin, f));
     }
     
     double PerformanceWeighting::ComputeMean(const std::vector<double>& scores)
@@ -88,42 +94,6 @@ namespace TeamGlicko2
     {
         // z_i = (p_i - mean) / stddev
         return (score - mean) / stddev;
-    }
-    
-    double PerformanceWeighting::ComputeRawWeight(double zScore, double alpha)
-    {
-        // w_i^raw = 1 + alpha * z_i
-        return 1.0 + alpha * zScore;
-    }
-    
-    double PerformanceWeighting::ClampWeight(double weight, double wMin, double wMax)
-    {
-        // w_i = min(wMax, max(wMin, w_i^raw))
-        return std::min(wMax, std::max(wMin, weight));
-    }
-    
-    void PerformanceWeighting::NormalizeWeights(std::vector<PlayerWeight>& weights)
-    {
-        if (weights.empty())
-        {
-            return;
-        }
-        
-        // Compute sum of clamped weights
-        double sumWeights = 0.0;
-        for (const auto& w : weights)
-        {
-            sumWeights += w.clampedWeight;
-        }
-        
-        // Normalize: w_i_tilde = w_i * |T| / sum(w_j)
-        int teamSize = weights.size();
-        double normalizationFactor = teamSize / sumWeights;
-        
-        for (auto& w : weights)
-        {
-            w.normalizedWeight = w.clampedWeight * normalizationFactor;
-        }
     }
     
 } // namespace TeamGlicko2

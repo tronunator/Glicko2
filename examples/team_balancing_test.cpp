@@ -12,7 +12,7 @@ void PrintPlayer(int id, const PlayerInfo& player)
     std::cout << "  Player " << id << ": "
               << "Rating=" << std::fixed << std::setprecision(0) << player.rating.GetRating()
               << ", RD=" << std::setprecision(0) << player.rating.GetRD()
-              << ", Risk-Adj=" << std::setprecision(1) << player.riskAdjustedScore
+              << ", Eff=" << std::setprecision(1) << player.effectiveRating
               << std::endl;
 }
 
@@ -228,7 +228,7 @@ int main()
     std::cout << "|           Team Balancing Algorithm - Test Suite                   |\n";
     std::cout << "=====================================================================\n";
     
-    std::cout << "Using lambda = " << config.lambda << " and gamma = " << config.gamma  << std::endl;
+    std::cout << "Using lambda = " << config.lambda  << std::endl;
     Test_TopPlayerConstraint();
     Test_ExtremeSkillGap();
     Test_TopPlayerMultipleWeakPlayers();

@@ -1,5 +1,5 @@
 // batch_processor.cpp - Process match CSV data through TeamGlicko2 system
-// Reads match_stats.csv and outputs rating evolution to rating_results.csv
+// Reads test/match_stats.csv and outputs rating evolution to rating_results.csv
 
 #include <iostream>
 #include <fstream>
@@ -52,8 +52,8 @@ double ComputePerformanceScore(const PlayerMatchData& player) {
 }
 
 int main(int argc, char* argv[]) {
-    std::string inputFile = "match_stats.csv";
-    std::string outputFile = "rating_results.csv";
+    std::string inputFile = "test/match_stats.csv";
+    std::string outputFile = "test/rating_results.csv";
     
     if (argc > 1) inputFile = argv[1];
     if (argc > 2) outputFile = argv[2];

@@ -43,19 +43,19 @@ namespace TeamGlicko2
         static void ProcessMatch(MatchResult& match);
         
         /// Update a single player's rating based on team outcome
-        /// This implements the single-opponent Glicko-2 update with performance weighting
+        /// This implements the single-opponent Glicko-2 update with sign-aware performance scaling
         /// @param player Current player rating
         /// @param opponentMu Opposing team's aggregated mu
         /// @param opponentPhi Opposing team's aggregated phi
         /// @param score Match outcome (1.0 = win, 0.0 = loss, 0.5 = draw)
-        /// @param performanceWeight Normalized performance weight (w_i_tilde)
+        /// @param zScore Performance z-score relative to teammates
         /// @return Updated player rating
         static PlayerRating UpdatePlayerRating(
             const PlayerRating& player,
             double opponentMu,
             double opponentPhi,
             double score,
-            double performanceWeight);
+            double zScore);
         
     private:
         /// Compute the v (variance) term for Glicko-2 update
@@ -97,13 +97,6 @@ namespace TeamGlicko2
             double g,
             double score,
             double expectedScore);
-        
-        /// Apply performance weighting to rating change
-        /// mu' = mu + w_tilde * (mu* - mu)
-        static double ApplyPerformanceWeighting(
-            double mu,
-            double muStar,
-            double performanceWeight);
         
         /// Optionally clamp the final rating change
         /// Limits |mu' - mu| to kMaxRatingChange

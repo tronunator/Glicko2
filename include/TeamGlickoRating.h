@@ -65,6 +65,39 @@ namespace TeamGlicko2
         /// Set volatility from Glicko-2 scale (sigma)
         void SetSigma(double sigmaValue) { sigma = sigmaValue; }
         
+        // ========== Recent Performance Tracking ==========
+        
+        /// Get recent performance index (EMA of z-scores)
+        double GetPerfIndexEMA() const { return perfIndexEMA; }
+        
+        /// Get number of games contributing to performance index
+        int GetPerfGames() const { return perfGames; }
+        
+        /// Set recent performance index
+        void SetPerfIndexEMA(double value) { perfIndexEMA = value; }
+        
+        /// Set performance games count
+        void SetPerfGames(int count) { perfGames = count; }
+        
+        /// Update recent performance index with new match performance
+        /// @param matchPerfIndex z-score from latest match (relative to teammates)
+        /// @param targetWindow number of games for EMA window (default from config)
+        void UpdateRecentPerformance(double matchPerfIndex, 
+                                    double targetWindow = TeamGlicko2::kPerfTargetWindow);
+        
+        /// Compute recent rating: base rating + performance boost
+        /// @param perfToRating rating points per 1σ of performance (default from config)
+        /// @return Recent rating based on short-term form
+        double ComputeRecentRating(double perfToRating = TeamGlicko2::kPerfToRating) const;
+        
+        /// Compute effective rating: blend of long-term Glicko and recent performance
+        /// Uses RD as trust factor - high RD allows more performance influence
+        /// @param perfToRating rating points per 1σ of performance (default from config)
+        /// @param rdScale RD scale constant for blending (default from config)
+        /// @return Effective rating for matchmaking/balancing
+        double ComputeEffectiveRating(double perfToRating = TeamGlicko2::kPerfToRating,
+                                      double rdScale = TeamGlicko2::kRDScaleConstant) const;
+        
         // ========== Utility Functions ==========
         
         /// Computes g(phi) function used in Glicko-2 calculations
@@ -74,6 +107,16 @@ namespace TeamGlicko2
         /// Computes expected score E against another player
         /// E = 1 / (1 + exp(-g(phi_opp) * (mu - mu_opp)))
         double ComputeExpectedScore(double muOpp, double gOpp) const;
+        
+        /// Apply inactivity decay to rating deviation
+        /// RD increases when player is inactive, representing growing uncertainty
+        /// @param roundsInPastDays Number of rounds played in past D days
+        /// @param deltaDays Days since last match
+        /// @param minRoundsForActivity Minimum rounds to be considered active (default from config)
+        /// @param daysPerPeriod Days per rating period for decay calculation (default from config)
+        void DecayForInactivity(int roundsInPastDays, double deltaDays, 
+                               int minRoundsForActivity = TeamGlicko2::kMinRoundsForActivity,
+                               double daysPerPeriod = TeamGlicko2::kDaysPerRatingPeriod);
         
         /// Print rating information
         friend std::ostream& operator<<(std::ostream& os, const PlayerRating& rating);
@@ -87,6 +130,12 @@ namespace TeamGlicko2
         
         /// Rating volatility
         double sigma;
+        
+        /// Recent performance index (EMA of z-scores relative to teammates)
+        double perfIndexEMA;
+        
+        /// Number of games contributing to performance index
+        int perfGames;
     };
     
 } // namespace TeamGlicko2

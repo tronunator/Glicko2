@@ -21,18 +21,19 @@ namespace TeamGlicko2
         int teamSize = static_cast<int>(players.size()) / 2;
         bool isUnevenTeams = (players.size() % 2 != 0);
         
-        // Calculate risk-adjusted scores for all players
+        // Calculate effective ratings for all players
         std::vector<PlayerInfo> sortedPlayers = players;
         for (auto& player : sortedPlayers)
         {
-            player.riskAdjustedScore = ComputeRiskAdjustedScore(player.rating, config.gamma);
+            player.effectiveRating = player.rating.ComputeEffectiveRating();
         }
         
-        // Sort by raw rating R_i (descending) to identify top-2 players
-        // This ensures we use the actual rating, not risk-adjusted score, for the constraint
+        // Sort by effective rating (descending) to identify top-2 players
         std::sort(sortedPlayers.begin(), sortedPlayers.end(),
-            [](const PlayerInfo& a, const PlayerInfo& b) {
-                return a.rating.GetRating() > b.rating.GetRating();
+            [&config](const PlayerInfo& a, const PlayerInfo& b) {
+                double ratingA = a.rating.ComputeEffectiveRating();
+                double ratingB = b.rating.ComputeEffectiveRating();
+                return ratingA > ratingB;
             });
         
         // Initialize best assignment
@@ -71,23 +72,15 @@ namespace TeamGlicko2
         return bestAssignment;
     }
     
-    double TeamBalancer::ComputeRiskAdjustedScore(
-        const PlayerRating& rating,
-        double gamma)
-    {
-        // Risk-adjusted score: S_i = R_i - gamma * RD_i
-        // This penalizes players with high uncertainty
-        return rating.GetRating() - (gamma * rating.GetRD());
-    }
-    
     double TeamBalancer::CalculateTeamStrength(
         const std::vector<PlayerInfo>& players,
         const std::vector<int>& playerIndices)
     {
+        // Sum of effective ratings for team strength
         double sum = 0.0;
         for (int idx : playerIndices)
         {
-            sum += players[idx].riskAdjustedScore;
+            sum += players[idx].effectiveRating;
         }
         return sum;
     }
@@ -131,7 +124,7 @@ namespace TeamGlicko2
         double& outPureRating0,
         double& outPureRating1)
     {
-        // Calculate team strengths (sum of risk-adjusted scores)
+        // Calculate team strengths (sum of effective ratings)
         double totalStrength0 = CalculateTeamStrength(players, team0Indices);
         double totalStrength1 = CalculateTeamStrength(players, team1Indices);
         
@@ -158,7 +151,7 @@ namespace TeamGlicko2
         double avgUncertainty0 = (size0 > 0) ? totalUncertainty0 / std::sqrt(size0) : 0.0;
         double avgUncertainty1 = (size1 > 0) ? totalUncertainty1 / std::sqrt(size1) : 0.0;
         
-        // Objective function: J = |avg(S_A) - avg(S_B)| + lambda * |avg(U_A) - avg(U_B)|
+        // Objective function: J = |avg(R_eff_A) - avg(R_eff_B)| + lambda * |avg(U_A) - avg(U_B)|
         // For even teams, this is equivalent to sum-based comparison
         // For odd teams (4v3), this provides fair comparison
         double strengthDiff = std::abs(avgStrength0 - avgStrength1);

@@ -32,9 +32,9 @@ namespace TeamGlicko2
         TeamRatingStats statsA = TeamRatingAggregator::ComputeTeamStats(teamARatings);
         TeamRatingStats statsB = TeamRatingAggregator::ComputeTeamStats(teamBRatings);
         
-        // Step 3: Compute performance weights for each team
-        std::vector<PlayerWeight> weightsA = PerformanceWeighting::ComputeWeights(teamAPerformance);
-        std::vector<PlayerWeight> weightsB = PerformanceWeighting::ComputeWeights(teamBPerformance);
+        // Step 3: Compute performance z-scores for each team
+        std::vector<PlayerWeight> weightsA = PerformanceWeighting::ComputeZScores(teamAPerformance);
+        std::vector<PlayerWeight> weightsB = PerformanceWeighting::ComputeZScores(teamBPerformance);
         
         // Step 4: Update ratings for Team A players
         for (size_t i = 0; i < match.teamA.size(); ++i)
@@ -44,7 +44,7 @@ namespace TeamGlicko2
                 statsB.mu,
                 statsB.phi,
                 match.scoreA,
-                weightsA[i].normalizedWeight
+                weightsA[i].zScore
             );
         }
         
@@ -56,7 +56,7 @@ namespace TeamGlicko2
                 statsA.mu,
                 statsA.phi,
                 match.scoreB,
-                weightsB[i].normalizedWeight
+                weightsB[i].zScore
             );
         }
     }
@@ -66,7 +66,7 @@ namespace TeamGlicko2
         double opponentMu,
         double opponentPhi,
         double score,
-        double performanceWeight)
+        double zScore)
     {
         // Get current rating parameters
         double mu = player.GetMu();
@@ -95,8 +95,12 @@ namespace TeamGlicko2
         // Update rating mean (standard Glicko-2)
         double muStar = UpdateRatingMean(mu, phiPrime, g, score, expectedScore);
         
-        // Apply performance weighting
-        double muPrime = ApplyPerformanceWeighting(mu, muStar, performanceWeight);
+        // Compute rating change
+        double deltaMu = muStar - mu;
+        
+        // Apply sign-aware performance scaling
+        double scalingFactor = PerformanceWeighting::ComputeScalingFactor(zScore, deltaMu);
+        double muPrime = mu + scalingFactor * deltaMu;
         
         // Optional: clamp rating change
         if (TeamGlicko2::kEnableRatingClamp)
@@ -226,16 +230,6 @@ namespace TeamGlicko2
     {
         // mu* = mu + phi'^2 * g * (s - E)
         return mu + phiPrime * phiPrime * g * (score - expectedScore);
-    }
-    
-    double TeamGlicko2System::ApplyPerformanceWeighting(
-        double mu,
-        double muStar,
-        double performanceWeight)
-    {
-        // mu' = mu + w_tilde * (mu* - mu)
-        double deltaMu = muStar - mu;
-        return mu + performanceWeight * deltaMu;
     }
     
     double TeamGlicko2System::ClampRatingChange(double mu, double muPrime)

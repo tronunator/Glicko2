@@ -13,16 +13,15 @@ namespace TeamGlicko2
     struct PlayerInfo
     {
         int playerId;              // Unique identifier for the player
-        PlayerRating rating;       // Full rating state (R, RD, volatility)
-        double riskAdjustedScore;  // S_i = R_i - gamma * RD_i
+        PlayerRating rating;       // Full rating state (R, RD, volatility, performance)
+        double effectiveRating;    // R_eff = effective rating (accounts for uncertainty via RD-weighted blending)
         
-        PlayerInfo() : playerId(0), riskAdjustedScore(0.0) {}
-        PlayerInfo(int id, const PlayerRating& r, double gamma = TeamGlicko2::kGamma)
+        PlayerInfo() : playerId(0), effectiveRating(0.0) {}
+        PlayerInfo(int id, const PlayerRating& r)
             : playerId(id), rating(r)
         {
-            // Risk-adjusted score: S_i = R_i - gamma * RD_i
-            // Higher RD = more uncertain = lower score
-            riskAdjustedScore = rating.GetRating() - (gamma * rating.GetRD());
+            // Use effective rating (already accounts for uncertainty via RD-weighted blending)
+            effectiveRating = rating.ComputeEffectiveRating();
         }
     };
     
@@ -54,12 +53,6 @@ namespace TeamGlicko2
     /// Configuration for team balancing algorithm
     struct BalancerConfig
     {
-        /// Gamma: Risk-adjustment parameter for player score
-        /// S_i = R_i - gamma * RD_i
-        /// Range: [0.0, ∞)
-        /// Default from kGamma
-        double gamma;
-        
         /// Lambda: Team uncertainty balance weight
         /// Objective = |avg(S_A) - avg(S_B)| + lambda * |avg(U_A) - avg(U_B)|
         /// Uses averages for fair handling of uneven teams (4v3, 5v4)
@@ -84,8 +77,7 @@ namespace TeamGlicko2
         int maxCombinationsToTry;
         
         BalancerConfig()
-            : gamma(TeamGlicko2::kGamma)
-            , lambda(TeamGlicko2::kLambda)
+            : lambda(TeamGlicko2::kLambda)
             , separateTopPlayers(true)
             , putTopPlayerInSmallerTeam(true)
             , maxCombinationsToTry(10000) {}
@@ -104,13 +96,8 @@ namespace TeamGlicko2
             const std::vector<PlayerInfo>& players,
             const BalancerConfig& config = BalancerConfig());
         
-        /// Compute risk-adjusted score for a player
-        /// S_i = R_i - gamma * RD_i
-        static double ComputeRiskAdjustedScore(
-            const PlayerRating& rating,
-            double gamma);
-        
-        /// Calculate team strength (sum of risk-adjusted scores)
+        /// Calculate team strength (sum of effective ratings)
+        /// Returns sum of R_eff for all players in the team
         static double CalculateTeamStrength(
             const std::vector<PlayerInfo>& players,
             const std::vector<int>& playerIndices);
@@ -126,7 +113,7 @@ namespace TeamGlicko2
             const std::vector<int>& playerIndices);
         
         /// Evaluate objective function J(A,B) for a team assignment
-        /// J = |avg(S_A) - avg(S_B)| + lambda * |avg(U_A) - avg(U_B)|
+        /// J = |avg(R_eff_A) - avg(R_eff_B)| + lambda * |avg(U_A) - avg(U_B)|
         /// Uses averages for fair comparison in uneven teams (4v3, 5v4)
         /// For even teams, equivalent to sum-based comparison
         /// Returns the objective value and populates output parameters
