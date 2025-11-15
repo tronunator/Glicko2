@@ -46,7 +46,6 @@ LIB_OBJECTS := $(BUILD_DIR)/TeamGlickoRating.o \
 EXAMPLE_TARGET := $(BUILD_DIR)/example_usage
 BATCH_TARGET := $(BUILD_DIR)/batch_processor
 BALANCE_TARGET := $(BUILD_DIR)/team_balancing_test
-PERF_TRACK_TARGET := $(BUILD_DIR)/performance_tracking_demo
 
 # Compiler flags
 ifeq ($(COMPILER),MSVC)
@@ -113,8 +112,6 @@ else
 endif
 	@echo Build complete: $@
 
-# Build performance_tracking_demo
-$(PERF_TRACK_TARGET): $(LIB_OBJECTS) $(BUILD_DIR)/performance_tracking_demo.o
 ifeq ($(COMPILER),MSVC)
 	$(CXX) $(CXXFLAGS) $^ /Fe:$@ $(LDFLAGS)
 else
@@ -195,4 +192,3 @@ $(BUILD_DIR)/TeamGlicko2System.o: $(SRC_DIR)/TeamGlicko2System.cpp $(INC_DIR)/Te
 $(BUILD_DIR)/TeamBalancer.o: $(SRC_DIR)/TeamBalancer.cpp $(INC_DIR)/TeamBalancer.h $(INC_DIR)/TeamGlickoRating.h
 $(BUILD_DIR)/example_usage.o: $(EXAMPLE_DIR)/example_usage.cpp $(INC_DIR)/TeamGlicko2System.h
 $(BUILD_DIR)/team_balancing_test.o: $(EXAMPLE_DIR)/team_balancing_test.cpp $(INC_DIR)/TeamBalancer.h
-$(BUILD_DIR)/performance_tracking_demo.o: $(EXAMPLE_DIR)/performance_tracking_demo.cpp $(INC_DIR)/TeamGlicko2System.h $(INC_DIR)/PerformanceNormalization.h

@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/cpplint/cpplint
+    rev: 1.6.1
+    hooks:
+      - id: cpplint
+        files: \.(cpp|h|hpp|cc)$

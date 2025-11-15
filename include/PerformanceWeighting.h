@@ -1,27 +1,24 @@
-#ifndef PERFORMANCE_WEIGHTING_H
-#define PERFORMANCE_WEIGHTING_H
+#ifndef GLICKO2_INCLUDE_PERFORMANCEWEIGHTING_H_
+#define GLICKO2_INCLUDE_PERFORMANCEWEIGHTING_H_
 
 #include <vector>
 #include <cmath>
 #include "TeamGlicko2Config.h"
 
-namespace TeamGlicko2
-{
+namespace TeamGlicko2 {
     /// Represents performance-based scaling for a single player
-    struct PlayerWeight
-    {
+    struct PlayerWeight {
         int playerIndex;        // Index in team array
-        double performanceScore; // Raw performance score p_i
+        double performanceScore;  // Raw performance score p_i
         double zScore;          // Standardized z-score relative to teammates
-        
-        PlayerWeight() 
+
+        PlayerWeight()
             : playerIndex(0), performanceScore(0.0), zScore(0.0) {}
     };
-    
+
     /// Computes performance-based scaling factors for team members
     /// Uses sign-aware formula: f_i = 1 + β·sign(Δμ)·z_i
-    class PerformanceWeighting
-    {
+    class PerformanceWeighting {
     public:
         /// Compute z-scores for all players in a team
         /// Z-scores measure performance relative to teammates
@@ -29,7 +26,7 @@ namespace TeamGlicko2
         /// @return Vector of PlayerWeight structs with z-scores
         static std::vector<PlayerWeight> ComputeZScores(
             const std::vector<double>& performanceScores);
-        
+
         /// Compute sign-aware scaling factor for rating adjustment
         /// f_i = 1 + β·sign(Δμ)·z_i, clamped to [fMin, fMax]
         /// @param zScore Performance z-score relative to teammates
@@ -44,19 +41,19 @@ namespace TeamGlicko2
             double beta = TeamGlicko2::kBeta,
             double fMin = TeamGlicko2::kScaleMin,
             double fMax = TeamGlicko2::kScaleMax);
-        
+
         /// Compute mean performance score for a team
         static double ComputeMean(const std::vector<double>& scores);
-        
+
         /// Compute standard deviation of performance scores
         /// Includes epsilon to avoid division by zero
         static double ComputeStdDev(const std::vector<double>& scores, double mean);
-        
+
         /// Compute z-score for a performance value
         /// z_i = (p_i - mean) / stddev
         static double ComputeZScore(double score, double mean, double stddev);
     };
-    
-} // namespace TeamGlicko2
 
-#endif // PERFORMANCE_WEIGHTING_H
+}  // namespace TeamGlicko2
+
+#endif  // GLICKO2_INCLUDE_PERFORMANCEWEIGHTING_H_
